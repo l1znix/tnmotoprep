@@ -1,0 +1,255 @@
+:root {
+  --paper: #f3efe4;
+  --sheet: #fbf8f0;
+  --ink: #2b2a27;
+  --faint: #6b665b;
+  --rule: #cfc8b8;
+  --again: #a33a2a;
+  --hard: #86661a;
+  --good: #3d6b3a;
+  --easy: #2f5d82;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1d1c1a;
+    --sheet: #262522;
+    --ink: #d9d4c7;
+    --faint: #8f897c;
+    --rule: #403d37;
+    --again: #d9766a;
+    --hard: #c9a659;
+    --good: #86b383;
+    --easy: #7fa9cc;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  /* paper grain */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  color: var(--ink);
+  font: 16px/1.55 ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", "Courier New", monospace;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  --pad: clamp(1rem, 4vw, 3rem);
+  max-width: 78rem;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: max(var(--pad), env(safe-area-inset-top)) max(var(--pad), env(safe-area-inset-right)) max(var(--pad), env(safe-area-inset-bottom)) max(var(--pad), env(safe-area-inset-left));
+}
+
+a { color: inherit; }
+
+button, input {
+  font: inherit;
+  color: inherit;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  touch-action: manipulation;
+}
+
+button { cursor: pointer; }
+button:active { background: var(--ink); color: var(--paper); }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.plain {
+  background: none;
+  border: 0;
+  padding: .75rem 0;
+  text-decoration: underline;
+}
+.plain:active { background: none; color: var(--faint); }
+
+.new { color: var(--easy); }
+.learn { color: var(--again); }
+.due { color: var(--good); }
+
+/* password */
+
+.lock {
+  width: 100%;
+  max-width: 24rem;
+  margin: auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .5rem;
+}
+.lock input, .lock button { padding: .9rem 1rem; min-width: 0; }
+.lock .error { grid-column: 1 / -1; margin: 0; color: var(--again); }
+
+/* home */
+
+h1 {
+  font-size: 1rem;
+  font-weight: bold;
+  margin: 1rem 0;
+}
+
+/* grows instead of clipping when the cards don't fit a short screen */
+#app.home { height: auto; min-height: 100vh; min-height: 100dvh; }
+
+.decks {
+  flex: 1;
+  display: grid;
+  grid-auto-rows: 1fr;
+  gap: 1rem;
+}
+.deck {
+  display: flex;
+  flex-direction: column;
+  min-height: 9rem;
+  padding: 1.25rem;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  box-shadow: 2px 3px 0 rgba(0, 0, 0, .05);
+  text-decoration: none;
+}
+.deck:hover { border-color: var(--ink); box-shadow: 4px 5px 0 rgba(0, 0, 0, .08); }
+.deck:active { background: var(--ink); color: var(--paper); }
+.deck:active * { color: inherit; }
+.deck .name { font-size: 1.5rem; font-weight: bold; line-height: 1.2; }
+.deck .sub, .deck .more { color: var(--faint); }
+.deck .stats, .deck .more { margin-top: auto; padding-top: .75rem; }
+.stats { display: flex; gap: 1.75rem; }
+.stat { display: flex; flex-direction: column; color: var(--faint); font-size: .8rem; }
+.stat b { font-size: 1.75rem; line-height: 1.1; }
+
+.settings {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-top: 1rem;
+  color: var(--faint);
+}
+.settings input { width: 4.5rem; padding: .5rem; }
+.settings .plain { margin-left: auto; }
+
+/* all cards */
+
+#app.long { height: auto; }
+
+.all {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+.all.tiles { grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); }
+.all li {
+  padding: 1.25rem;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  box-shadow: 2px 3px 0 rgba(0, 0, 0, .05);
+}
+.all.tiles li { padding: 1rem; }
+.all.tiles .note { font-size: .875rem; }
+.all p { margin: 0; overflow-wrap: break-word; }
+.all img { display: block; object-fit: contain; margin-bottom: .5rem; }
+.all .back { font-weight: bold; margin-top: .5rem; }
+.all .note { color: var(--faint); margin-top: .5rem; }
+
+/* study */
+
+#app.study { max-width: 66rem; }
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.bar a { padding: .75rem 0; }
+.counts { margin-left: auto; white-space: nowrap; }
+
+.sheet {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  box-shadow: 2px 3px 0 rgba(0, 0, 0, .05);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+.sheet > * { margin: 0; }
+.sheet > :first-child { margin-top: auto; }
+.sheet > :last-child { margin-bottom: auto; }
+.sheet img {
+  display: block;
+  width: min(100%, 15rem);
+  max-height: 50vh;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  margin-left: auto;
+  margin-right: auto;
+}
+.sheet hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px dashed var(--rule);
+  margin: 1.25rem 0;
+}
+.sheet .back { font-weight: bold; }
+.sheet .note { color: var(--faint); margin-top: .75rem; }
+.sheet .done { text-align: center; color: var(--faint); }
+
+.actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: .5rem;
+  margin-top: 1rem;
+}
+.actions button {
+  min-height: 3.75rem;
+  padding: .25rem 0;
+  line-height: 1.3;
+}
+.actions small {
+  display: block;
+  color: var(--faint);
+  font-size: .8rem;
+}
+.actions button:active small { color: inherit; }
+.again { color: var(--again); }
+.hard { color: var(--hard); }
+.good { color: var(--good); }
+.easy { color: var(--easy); }
+
+/* wide screens */
+
+@media (min-width: 48rem) {
+  .decks { grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: 30rem; }
+  .deck { padding: 1.75rem; }
+  .all.tiles { grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
+  .sheet { padding: 2.5rem; font-size: 1.25rem; }
+  .sheet img { width: min(100%, 20rem); }
+  .actions button { min-height: 4.5rem; }
+}
+
+/* short screens, e.g. a phone on its side */
+
+@media (max-height: 32rem) {
+  #app { --pad: 1rem; }
+  .sheet { padding: 1rem; font-size: 1rem; }
+  .sheet img { max-height: 35vh; }
+  .actions button { min-height: 3.25rem; }
+}
