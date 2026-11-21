@@ -297,6 +297,8 @@
     };
     document.body.append(box);
     box.showModal();
+    // focus lands on start, which scrolls a short screen to the bottom
+    box.scrollTop = 0;
   }
 
   function stat(name, n) {
