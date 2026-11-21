@@ -6,12 +6,15 @@
   var DAY = 86400000;
   var STEPS = [1, 10]; // learning steps, minutes
   var RELEARN = [10];
+  var IVL_MOD = 0.6; // scales good/easy review intervals
+  var EASY_IVL = 2; // days, graduating with easy
   var GRADES = ['again', 'hard', 'good', 'easy'];
   var COOKIE = 'tnmotoprep_pw';
   var ITERATIONS = 250000; // keep in sync with tools/build.js
   var DECKS = null; // set once data.js is decrypted
 
   var app = document.getElementById('app');
+  var fresh = false; // nothing saved on this device yet
   var state = load();
   var current = null;
   var shown = false;
@@ -22,7 +25,10 @@
   function load() {
     var s = null;
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
-    if (!s || s.v !== 1) s = { v: 1, cards: {}, day: 0, newDone: {}, newPerDay: 20 };
+    if (!s || s.v !== 1) {
+      fresh = true;
+      s = { v: 1, cards: {}, day: 0, newDone: {}, newPerDay: 20 };
+    }
     return s;
   }
 
@@ -64,6 +70,7 @@
     return decrypt(password).then(function () {
       setCookie(password);
       render();
+      if (fresh) intro();
     });
   }
 
@@ -122,10 +129,10 @@
         c.due = now + RELEARN[0] * MIN;
         return c;
       }
-      // each grade lands at least a day past the one below it
+      // good never lands before hard, easy at least a day past good
       var hard = Math.max(c.ivl + 1, Math.round(c.ivl * 1.2));
-      var good = Math.max(hard + 1, Math.round(c.ivl * c.ease));
-      var easy = Math.max(good + 1, Math.round(c.ivl * c.ease * 1.3));
+      var good = Math.max(hard, Math.round(c.ivl * c.ease * IVL_MOD));
+      var easy = Math.max(good + 1, Math.round(c.ivl * c.ease * 1.3 * IVL_MOD));
       if (grade === 1) c.ease = Math.max(1.3, c.ease - 0.15);
       if (grade === 3) c.ease += 0.15;
       c.ivl = grade === 1 ? hard : grade === 2 ? good : easy;
@@ -145,7 +152,7 @@
       c.step++;
       c.due = now + steps[c.step] * MIN;
     } else {
-      if (!c.re) c.ivl = grade === 3 ? 4 : 1;
+      if (!c.re) c.ivl = grade === 3 ? EASY_IVL : 1;
       c.s = 'review';
       delete c.re;
       delete c.step;
@@ -251,6 +258,45 @@
       });
       app.append(list);
     });
+  }
+
+  // shown once, until the first save
+  function intro() {
+    var box = el('dialog', 'intro');
+    box.append(
+      el('h1', null, 'how this works'),
+      el('p', null, 'each card shows a question or a sign. answer it in your head, tap show, then grade how well you knew it:')
+    );
+    var grades = el('ul');
+    [
+      "didn't know it. it comes back in a few minutes",
+      'got there, but it was a struggle',
+      'knew it',
+      'knew it instantly'
+    ].forEach(function (text, grade) {
+      var item = el('li');
+      item.append(el('b', GRADES[grade], GRADES[grade]), ' ' + text);
+      grades.append(item);
+    });
+    box.append(grades);
+    box.append(el('p', null, 'the time over each button is how long until you see that card again. cards you know drift further apart, cards you miss come back sooner.'));
+    var legend = el('p');
+    legend.append(
+      'each deck counts ', el('b', 'new', 'new'), ' cards you have not seen, cards you are still ',
+      el('b', 'learn', 'learn'), 'ing, and reviews that are ', el('b', 'due', 'due'), ' today.'
+    );
+    box.append(legend);
+    box.append(el('p', null, 'a short session every day beats one long one. clear what is due and the schedule does the rest.'));
+    var start = el('button', null, 'start');
+    start.onclick = function () { box.close(); };
+    box.append(start);
+    box.onclose = function () {
+      fresh = false;
+      save();
+      box.remove();
+    };
+    document.body.append(box);
+    box.showModal();
   }
 
   function stat(name, n) {
@@ -407,7 +453,7 @@
 
   document.addEventListener('keydown', function (e) {
     var deck = deckName();
-    if (!deck || !current || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!deck || !current || fresh || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       if (shown) grade_(deck, 2); else reveal();
