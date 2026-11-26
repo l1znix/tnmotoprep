@@ -106,7 +106,8 @@ button:active { background: var(--ink); color: var(--paper); }
 .intro h1 { margin-top: 0; }
 .intro p { margin: 0 0 1rem; }
 .intro ul { list-style: none; margin: 0 0 1rem; padding: 0; }
-.intro button { width: 100%; padding: .9rem 1rem; }
+.intro button, .intro input { width: 100%; padding: .9rem 1rem; }
+.intro input { margin-bottom: 1rem; }
 
 /* home */
 

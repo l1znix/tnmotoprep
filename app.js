@@ -265,12 +265,12 @@
     var box = el('dialog', 'intro');
     box.append(
       el('h1', null, 'how this works'),
-      el('p', null, 'each card shows a question or a sign. answer it in your head, tap show, then grade how well you knew it:')
+      el('p', null, 'answer each card in your head, tap show, then grade yourself:')
     );
     var grades = el('ul');
     [
-      "didn't know it. it comes back in a few minutes",
-      'got there, but it was a struggle',
+      "didn't know it",
+      'struggled',
       'knew it',
       'knew it instantly'
     ].forEach(function (text, grade) {
@@ -279,26 +279,59 @@
       grades.append(item);
     });
     box.append(grades);
-    box.append(el('p', null, 'the time over each button is how long until you see that card again. cards you know drift further apart, cards you miss come back sooner.'));
+    box.append(el('p', null, 'the time over each button is when you see that card again.'));
     var legend = el('p');
     legend.append(
-      'each deck counts ', el('b', 'new', 'new'), ' cards you have not seen, cards you are still ',
-      el('b', 'learn', 'learn'), 'ing, and reviews that are ', el('b', 'due', 'due'), ' today.'
+      'each deck counts ', el('b', 'new', 'new'), ' cards, cards you are still ',
+      el('b', 'learn', 'learn'), 'ing, and reviews ', el('b', 'due', 'due'), ' today.'
     );
     box.append(legend);
-    box.append(el('p', null, 'a short session every day beats one long one. clear what is due and the schedule does the rest.'));
-    var start = el('button', null, 'start');
-    start.onclick = function () { box.close(); };
-    box.append(start);
+    box.append(el('p', null, 'a short session every day works best.'));
+    var next = el('button', null, 'next');
+    next.onclick = function () { pace(box); };
+    box.append(next);
     box.onclose = function () {
       fresh = false;
       save();
       box.remove();
+      render();
     };
     document.body.append(box);
     box.showModal();
-    // focus lands on start, which scrolls a short screen to the bottom
+    // focus lands on next, which scrolls a short screen to the bottom
     box.scrollTop = 0;
+  }
+
+  // intro step 2
+  function pace(box) {
+    box.textContent = '';
+    var form = el('form');
+    var input = el('input');
+    input.type = 'number';
+    input.min = 0;
+    input.max = 999;
+    input.inputMode = 'numeric';
+    input.value = state.newPerDay;
+    input.setAttribute('aria-label', 'new cards per day');
+    form.append(
+      el('h1', null, 'new cards per day'),
+      el('p', null, 'how many new cards to start each day, in each deck. reviews come on top of these.'),
+      input,
+      el('p', null, 'you can change this later under the decks.'),
+      el('button', null, 'start')
+    );
+    form.onsubmit = function (e) {
+      e.preventDefault();
+      state.newPerDay = perDay(input.value);
+      box.close();
+    };
+    box.append(form);
+    box.scrollTop = 0;
+  }
+
+  function perDay(value) {
+    var n = Math.round(Number(value));
+    return n >= 0 ? Math.min(n, 999) : 20;
   }
 
   function stat(name, n) {
@@ -346,8 +379,7 @@
     input.value = state.newPerDay;
     label.htmlFor = input.id;
     input.onchange = function () {
-      var n = Math.round(Number(input.value));
-      state.newPerDay = n >= 0 ? Math.min(n, 999) : 20;
+      state.newPerDay = perDay(input.value);
       save();
       render();
     };
