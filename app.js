@@ -442,11 +442,13 @@
     var now = Date.now();
     var q = queue(deck, now);
     var card = null;
-    if (pinned) {
-      // the card undo brought back goes first, whatever else is due
+    // the card undo brought back goes first, whatever else is due. failing
+    // that the card on screen stays, even if a learning card came due since
+    var keep = pinned || (current && current.id);
+    if (keep) {
       var pool = q.learn.concat(q.review, q.fresh);
       for (var i = 0; i < pool.length; i++) {
-        if (pool[i].id === pinned) card = pool[i];
+        if (pool[i].id === keep) card = pool[i];
       }
     }
     if (!card) card = pick(q, now);
