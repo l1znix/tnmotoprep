@@ -20,6 +20,10 @@ writes `data.js` and `signs/*.png`. the sign images are not encrypted.
 
 push to github, then settings → pages → deploy from branch → `main`, `/ (root)`.
 
+## move progress
+
+export under the decks gives a string (`tnm1:` + base64 of the deflated state). import on another device pastes it in and replaces the progress there.
+
 ## keys
 
 space/enter: show, then good. 1–4: again, hard, good, easy. z: undo.

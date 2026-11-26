@@ -52,7 +52,7 @@ body {
 
 a { color: inherit; }
 
-button, input {
+button, input, textarea {
   font: inherit;
   color: inherit;
   background: var(--sheet);
@@ -108,6 +108,18 @@ button:active { background: var(--ink); color: var(--paper); }
 .intro ul { list-style: none; margin: 0 0 1rem; padding: 0; }
 .intro button, .intro input { width: 100%; padding: .9rem 1rem; }
 .intro input { margin-bottom: 1rem; }
+.intro textarea {
+  display: block;
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: .75rem;
+  resize: vertical;
+  font-family: monospace;
+  font-size: .8rem;
+  word-break: break-all;
+}
+.intro .error { color: var(--again); }
+.intro .error:empty { display: none; }
 
 /* home */
 
@@ -154,7 +166,7 @@ h1 {
   color: var(--faint);
 }
 .settings input { width: 4.5rem; padding: .5rem; }
-.settings .plain { margin-left: auto; }
+.settings input + .plain { margin-left: auto; }
 
 /* all cards */
 

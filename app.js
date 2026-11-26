@@ -10,6 +10,7 @@
   var EASY_IVL = 2; // days, graduating with easy
   var GRADES = ['again', 'hard', 'good', 'easy'];
   var GUARD = 250; // ms after reveal before a grade counts
+  var PREFIX = 'tnm1:'; // marks an exported string
   var COOKIE = 'tnmotoprep_pw';
   var ITERATIONS = 250000; // keep in sync with tools/build.js
   var DECKS = null; // set once data.js is decrypted
@@ -39,6 +40,47 @@
 
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  // ---- transfer ----
+  // an export is PREFIX + base64(deflate-raw(json state))
+
+  function pipe(bytes, stream) {
+    return new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer();
+  }
+
+  function isObj(x) {
+    return !!x && typeof x === 'object' && !Array.isArray(x);
+  }
+
+  function pack() {
+    return pipe(new TextEncoder().encode(JSON.stringify(state)), new CompressionStream('deflate-raw'))
+      .then(function (buf) {
+        var bin = '';
+        new Uint8Array(buf).forEach(function (b) { bin += String.fromCharCode(b); });
+        return PREFIX + btoa(bin);
+      });
+  }
+
+  // rejects unless text is an export of a usable state
+  function unpack(text) {
+    return Promise.resolve()
+      .then(function () {
+        text = text.replace(/\s+/g, '');
+        if (text.indexOf(PREFIX) !== 0) throw new Error('not an export');
+        var raw = Uint8Array.from(atob(text.slice(PREFIX.length)), function (ch) { return ch.charCodeAt(0); });
+        return pipe(raw, new DecompressionStream('deflate-raw'));
+      })
+      .then(function (buf) {
+        var s = JSON.parse(new TextDecoder().decode(buf));
+        var ok = isObj(s) && s.v === 1 && isObj(s.cards) && isObj(s.newDone) && typeof s.day === 'number' &&
+          Object.keys(s.cards).every(function (id) {
+            var c = s.cards[id];
+            return isObj(c) && (c.s === 'learn' || c.s === 'review') && typeof c.due === 'number';
+          });
+        if (!ok) throw new Error('not an export');
+        return { v: 1, cards: s.cards, day: s.day, newDone: s.newDone, newPerDay: perDay(s.newPerDay) };
+      });
   }
 
   // ---- password ----
@@ -434,8 +476,78 @@
       save();
       render();
     };
-    settings.append(label, input, reset);
+    settings.append(label, input);
+    if (window.CompressionStream) {
+      var out = el('button', 'plain', 'export');
+      out.onclick = function () { transfer(false); };
+      var into = el('button', 'plain', 'import');
+      into.onclick = function () { transfer(true); };
+      settings.append(out, into);
+    }
+    settings.append(reset);
     app.append(settings);
+  }
+
+  // export shows the string to copy, import takes one pasted in
+  function transfer(importing) {
+    var box = el('dialog', 'intro');
+    var form = el('form');
+    var text = el('textarea');
+    text.rows = 6;
+    text.spellcheck = false;
+    text.setAttribute('aria-label', importing ? 'exported progress' : 'your progress');
+    var error = el('p', 'error');
+    var go = el('button', null, importing ? 'import' : 'copy');
+    var close = el('button', 'plain', 'close');
+    close.type = 'button';
+    close.onclick = function () { box.close(); };
+    form.append(
+      el('h1', null, importing ? 'import progress' : 'export progress'),
+      el('p', null, importing
+        ? 'paste a string exported from another device. it replaces the progress on this one.'
+        : 'copy this string and import it on another device.'),
+      text, error, go, close
+    );
+
+    if (importing) {
+      form.onsubmit = function (e) {
+        e.preventDefault();
+        unpack(text.value).then(function (s) {
+          if (Object.keys(state.cards).length && !confirm('replace progress on this device?')) return;
+          state = s;
+          undo = null;
+          pinned = null;
+          fresh = false;
+          save();
+          box.close();
+        }, function () {
+          error.textContent = "that isn't a valid export";
+        });
+      };
+    } else {
+      text.readOnly = true;
+      pack().then(function (str) {
+        text.value = str;
+        text.select();
+      });
+      form.onsubmit = function (e) {
+        e.preventDefault();
+        text.select();
+        navigator.clipboard.writeText(text.value).then(function () {
+          go.textContent = 'copied';
+        }, function () {
+          error.textContent = "couldn't copy, select the text and copy it yourself";
+        });
+      };
+    }
+
+    box.append(form);
+    box.onclose = function () {
+      box.remove();
+      render();
+    };
+    document.body.append(box);
+    box.showModal();
   }
 
   function study(deck) {
