@@ -22,4 +22,4 @@ push to github, then settings → pages → deploy from branch → `main`, `/ (r
 
 ## keys
 
-space/enter: show, then good. 1–4: again, hard, good, easy.
+space/enter: show, then good. 1–4: again, hard, good, easy. z: undo.

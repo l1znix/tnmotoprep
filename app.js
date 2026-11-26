@@ -9,6 +9,7 @@
   var IVL_MOD = 0.6; // scales good/easy review intervals
   var EASY_IVL = 2; // days, graduating with easy
   var GRADES = ['again', 'hard', 'good', 'easy'];
+  var GUARD = 250; // ms after reveal before a grade counts
   var COOKIE = 'tnmotoprep_pw';
   var ITERATIONS = 250000; // keep in sync with tools/build.js
   var DECKS = null; // set once data.js is decrypted
@@ -18,7 +19,11 @@
   var state = load();
   var current = null;
   var shown = false;
+  var shownAt = 0; // when the current card was revealed
   var undo = null;
+  var pinned = null; // id of the card undo brought back
+  var last = null; // id of the card graded most recently
+  var timer = null; // wakes the wait screen
 
   // ---- storage ----
 
@@ -112,6 +117,7 @@
       state.day = t;
       state.newDone = {};
       undo = null;
+      pinned = null;
     }
   }
 
@@ -129,10 +135,12 @@
         c.due = now + RELEARN[0] * MIN;
         return c;
       }
-      // good never lands before hard, easy at least a day past good
-      var hard = Math.max(c.ivl + 1, Math.round(c.ivl * 1.2));
-      var good = Math.max(hard, Math.round(c.ivl * c.ease * IVL_MOD));
-      var easy = Math.max(good + 1, Math.round(c.ivl * c.ease * 1.3 * IVL_MOD));
+      // good at least a day past hard, easy at least a day past good
+      // a late review that is still recalled earns part of the overdue days
+      var late = Math.max(0, day - c.due);
+      var hard = Math.max(c.ivl + 1, Math.round((c.ivl + late / 4) * 1.2));
+      var good = Math.max(hard + 1, Math.round((c.ivl + late / 2) * c.ease * IVL_MOD));
+      var easy = Math.max(good + 1, Math.round((c.ivl + late) * c.ease * 1.3 * IVL_MOD));
       if (grade === 1) c.ease = Math.max(1.3, c.ease - 0.15);
       if (grade === 3) c.ease += 0.15;
       c.ivl = grade === 1 ? hard : grade === 2 ? good : easy;
@@ -161,6 +169,32 @@
     return c;
   }
 
+  // unsigned 32-bit fnv-1a, then the murmur3 finalizer. plain fnv barely
+  // moves when only the last character changes, which keeps the sort order
+  function hash(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+    return h >>> 0;
+  }
+
+  // nudges review intervals by a day either way so cards learned together
+  // drift apart. seeded by id and due, so a regrade lands on the same day
+  function fuzz(c, id) {
+    if (c.s !== 'review' || c.ivl < 3) return c;
+    var delta = hash(id + ':' + c.due) % 3 - 1;
+    c.ivl += delta;
+    c.due += delta;
+    return c;
+  }
+
   function queue(deck, now) {
     var day = today(now);
     var q = { fresh: [], learn: [], review: [] };
@@ -172,15 +206,21 @@
     });
     var byDue = function (a, b) { return state.cards[a.id].due - state.cards[b.id].due; };
     q.learn.sort(byDue);
-    q.review.sort(byDue);
+    // shuffled, in an order that holds for the day
+    q.review.sort(function (a, b) { return hash(a.id + ':' + day) - hash(b.id + ':' + day); });
     q.fresh = q.fresh.slice(0, Math.max(0, state.newPerDay - (state.newDone[deck] || 0)));
     return q;
   }
 
-  // learning cards that are due, then reviews, then new, then learning cards early
+  // learning cards that are due, then reviews, then new, then learning cards
+  // early, but never the card that was just graded
   function pick(q, now) {
     if (q.learn.length && state.cards[q.learn[0].id].due <= now) return q.learn[0];
-    return q.review[0] || q.fresh[0] || q.learn[0] || null;
+    if (q.review[0] || q.fresh[0]) return q.review[0] || q.fresh[0];
+    for (var i = 0; i < q.learn.length; i++) {
+      if (q.learn[i].id !== last) return q.learn[i];
+    }
+    return null;
   }
 
   function interval(c, now) {
@@ -219,6 +259,7 @@
   }
 
   function render() {
+    clearTimeout(timer);
     if (!DECKS) return;
     rollover();
     var deck = deckName();
@@ -389,6 +430,7 @@
       state.cards = {};
       state.newDone = {};
       undo = null;
+      pinned = null;
       save();
       render();
     };
@@ -399,7 +441,15 @@
   function study(deck) {
     var now = Date.now();
     var q = queue(deck, now);
-    var card = pick(q, now);
+    var card = null;
+    if (pinned) {
+      // the card undo brought back goes first, whatever else is due
+      var pool = q.learn.concat(q.review, q.fresh);
+      for (var i = 0; i < pool.length; i++) {
+        if (pool[i].id === pinned) card = pool[i];
+      }
+    }
+    if (!card) card = pick(q, now);
     if (!current || current.id !== (card && card.id)) shown = false;
     current = card;
     app.className = 'study';
@@ -419,7 +469,14 @@
     var sheet = el('article', 'sheet');
     app.append(sheet);
     if (!card) {
-      sheet.append(el('p', 'done', 'done for today'));
+      if (q.learn.length) {
+        // only the card just graded is left, and it is not due yet
+        var next = state.cards[q.learn[0].id];
+        sheet.append(el('p', 'done', 'next card in ' + interval(next, now)));
+        timer = setTimeout(render, Math.min(next.due - now, MIN));
+      } else {
+        sheet.append(el('p', 'done', 'done for today'));
+      }
       return;
     }
 
@@ -456,18 +513,21 @@
   function reveal() {
     if (!current || shown) return;
     shown = true;
+    shownAt = Date.now();
     render();
   }
 
   function grade_(deck, grade) {
-    if (!current || !shown) return;
+    if (!current || !shown || Date.now() - shownAt < GUARD) return;
     var id = current.id;
+    last = id;
     var prev = state.cards[id];
     undo = { deck: deck, id: id, card: prev };
     if (!prev) state.newDone[deck] = (state.newDone[deck] || 0) + 1;
-    state.cards[id] = answer(prev, grade, Date.now());
+    state.cards[id] = fuzz(answer(prev, grade, Date.now()), id);
     save();
     current = null;
+    pinned = null;
     render();
   }
 
@@ -479,6 +539,7 @@
       delete state.cards[undo.id];
       state.newDone[undo.deck] = Math.max(0, (state.newDone[undo.deck] || 0) - 1);
     }
+    pinned = undo.id;
     undo = null;
     save();
     current = null;
@@ -487,9 +548,19 @@
 
   document.addEventListener('keydown', function (e) {
     var deck = deckName();
-    if (!deck || !current || fresh || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!deck || fresh || e.metaKey || e.ctrlKey || e.altKey) return;
+    // undo also works on the done and wait screens, where there is no card
+    if ((e.key === 'z' || e.key === 'u') && undo && undo.deck === deck) {
+      undoLast();
+      return;
+    }
+    if (!current) return;
     if (e.key === ' ' || e.key === 'Enter') {
+      // let a focused control activate itself
+      if (e.target.closest && e.target.closest('button, a, input')) return;
       e.preventDefault();
+      // a held key must not reveal and then grade
+      if (e.repeat) return;
       if (shown) grade_(deck, 2); else reveal();
     } else if (shown && e.key >= '1' && e.key <= '4') {
       grade_(deck, Number(e.key) - 1);
@@ -500,6 +571,17 @@
   // pick up day rollover and newly due cards when the tab comes back
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && !shown) render();
+  });
+  // another tab saved, take its state so ours doesn't overwrite it
+  window.addEventListener('storage', function (e) {
+    if (e.key !== KEY || e.newValue == null) return;
+    var s = null;
+    try { s = JSON.parse(e.newValue); } catch (err) {}
+    if (!s || s.v !== 1) return;
+    state = s;
+    undo = null;
+    pinned = null;
+    if (!shown) render();
   });
 
   var saved = getCookie();
